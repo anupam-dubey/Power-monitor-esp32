@@ -3,7 +3,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <HardwareSerial.h>
-#include <PZEM004T.h>
+#include <PZEM004Tv30.h>
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
 #include <WiFi.h>
@@ -17,13 +17,17 @@
 
 #define AIO_SERVER      "io.adafruit.com"
 #define AIO_SERVERPORT  1883                   // use 8883 for SSL
-#define AIO_USERNAME    "iotpower88"
-#define AIO_KEY         "          "
+#define AIO_USERNAME    "poweriot2025"
+#define AIO_KEY         "aio_ffxa27nOcvqfRSsqPf17KsrOvikI"
 
 
 
-HardwareSerial PzemSerial2(2);     // Use hwserial UART2 at pins IO-16 (RX2) and IO-17 (TX2)
-PZEM004T pzem(&PzemSerial2);
+// Define the UART2 RX and TX pins on ESP32 (Connect these to PZEM-004T)
+#define PZEM_RX_PIN 16  // ESP32 RX (Connect to PZEM TX)
+#define PZEM_TX_PIN 17  // ESP32 TX (Connect to PZEM RX)
+
+// Initialize the PZEM sensor using Hardware Serial2
+PZEM004Tv30 pzem(Serial2, PZEM_RX_PIN, PZEM_TX_PIN);
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define RLY1 26
@@ -32,7 +36,7 @@ PZEM004T pzem(&PzemSerial2);
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-IPAddress ip(192,168,1,1);
+
 /************ Global State (you don't need to change this!) ******************/
 
 // Create an ESP8266 WiFiClient class to connect to the MQTT server.
@@ -55,7 +59,7 @@ Adafruit_MQTT_Publish tpf = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/po
 Adafruit_MQTT_Publish tenergy = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/energy");
 // Setup a feed called 'onoff' for subscribing to changes.
 Adafruit_MQTT_Subscribe tl1 = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/load1");
-Adafruit_MQTT_Subscribe tl2 = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/load2");
+
 
 int wificounter=0;
 int readcounter=0;
@@ -63,8 +67,8 @@ bool nowifi=0;
 byte sendflag=0;
 void setup() {
   Serial.begin(115200);
-  pinMode(RLY1,OUTPUT);pinMode(RLY2,OUTPUT);pinMode(CLED,OUTPUT);
-  digitalWrite(RLY1,HIGH);digitalWrite(RLY2,HIGH);digitalWrite(CLED,HIGH);
+  pinMode(RLY1,OUTPUT);pinMode(CLED,OUTPUT);
+  digitalWrite(RLY1,LOW);digitalWrite(CLED,HIGH);
   
   
   
@@ -85,13 +89,13 @@ void setup() {
   display.setTextSize(2);             // Normal 1:1 pixel scale
   display.setTextColor(WHITE);        // Draw white text
   display.setCursor(0,0);             // Start at top-left corner
-  display.println(F("Parameter1"));
-  display.setCursor(0,14);             // Start at top-left corner
-  display.println(F("Parameter2"));
-  display.setCursor(0,28);             // Start at top-left corner
-  display.println(F("Parameter3"));
-  display.setCursor(0,40);             // Start at top-left corner
-  display.println(F("Parameter4"));
+  display.println(F("IOT POWER"));
+  display.setCursor(0,16);             // Start at top-left corner
+  display.println(F("Monitoring"));
+  display.setCursor(0,32);             // Start at top-left corner
+  display.println(F("GGITS EX"));
+  display.setCursor(0,48);             // Start at top-left corner
+  display.println(F("2025-2026"));
   // Show the display buffer on the screen. You MUST call display() after
   // drawing commands to make them visible on screen!
   display.display();
@@ -133,28 +137,27 @@ void setup() {
   }  
    while (true) {
       Serial.println("Connecting to PZEM...");
-      if(pzem.setAddress(ip))
+      if(pzem.readAddress())
         break;
       delay(1000);
    }
  readcounter=0;sendflag=0;
  // Setup MQTT subscription for onoff feed.
   mqtt.subscribe(&tl1);
-  // Setup MQTT subscription for onoff feed.
-  mqtt.subscribe(&tl2);
+
 }
 
 void loop() {
   Serial.print("Custom Address:");
    
-
-    // Read the data from the sensor
-    float voltage = pzem.voltage(ip);
-    float current = pzem.current(ip);
-    float power = pzem.power(ip);
-    float energy = pzem.energy(ip);
-    float pf = pzem.pf(ip);
-    float frequency = pzem.frequency(ip);
+    // Read data from the PZEM sensor
+    float voltage   = pzem.voltage();
+    float current   = pzem.current();
+    float power     = pzem.power();
+    float energy    = pzem.energy();
+    float frequency = pzem.frequency();
+    float pf        = pzem.pf();
+   
   
 
     // Check if the data is valid
@@ -216,22 +219,11 @@ void loop() {
       // Apply message to lamp
     String message = String(value);
     message.trim();
-    if (message == "ON") {digitalWrite(RLY1, HIGH);}
-    if (message == "OFF") {digitalWrite(RLY1, LOW);}
+    if (message == "ON") {digitalWrite(RLY1, LOW);}
+    if (message == "OFF") {digitalWrite(RLY1, HIGH);}
    
     }
-     if (subscription == &tl2) {
-      // convert mqtt ascii payload to int
-    char *value = (char *)tl2.lastread;
-      Serial.print(F("Got: "));
-      Serial.println(value);
-      // Apply message to lamp
-    String message = String(value);
-    message.trim();
-    if (message == "ON") {digitalWrite(RLY2, HIGH);}
-    if (message == "OFF") {digitalWrite(RLY2, LOW);}
-   
-    }
+     
   }
 }
 // Function to connect and reconnect as necessary to the MQTT server.
